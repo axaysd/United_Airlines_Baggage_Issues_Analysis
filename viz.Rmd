@@ -1,0 +1,34 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(syuzhet)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+
+# Load the dataset
+reviews <- read.csv("United_All.csv")
+
+# Calculate the sentiment
+reviews$sentiment <- get_sentiment(reviews$Review, method = "syuzhet")
+
+# Convert the Review Date column to Date type
+reviews$Review.Date <- dmy(reviews$Review.Date)
+
+# Aggregate sentiment scores by date
+daily_sentiment <- reviews %>%
+  group_by(Review.Date) %>%
+  summarise(mean_sentiment = mean(sentiment, na.rm = TRUE))
+
+# Plot only the linear trend line
+ggplot(daily_sentiment, aes(x = Review.Date, y = mean_sentiment)) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") + # Add only the linear trend line
+  labs(title = "Average Sentiment Over Review Date",
+       x = "Review Date",
+       y = "Average Sentiment Score") +
+  theme_minimal()
+
+```
