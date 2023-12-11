@@ -10,6 +10,8 @@ library(readr)
 library(syuzhet)
 library(tm)
 library(stringr)
+library(dplyr)
+library(ggplot2)
 
 # Load the CSV file containing all the passenger reviews of 4 airline companies
 reviews <- read.csv("Airline_Reviews.csv")
@@ -85,27 +87,50 @@ t.test(reviews_united$Overall_Rating ~ reviews_united$Mentioned_Luggage, reviews
 # Box plot
 boxplot(reviews_united$Overall_Rating ~ reviews_united$Mentioned_Luggage, reviews_united = reviews_united, xlab = "Luggage Mentioned? (0=No, 1=Yes)", ylab = "Overall Rating")
 
-# Function to calculate sentiment statistics and show comparison of current Customer sentiment between each airline
 calculate_sentiment_stats <- function(data, airline_name) {
   current_mean_sentiment <- mean(data$sentiment, na.rm = TRUE)
-  data_without_negative_luggage <- data %>% filter(!(grepl("luggage", Review, ignore.case = TRUE) & sentiment < 0))
+  cat("\nCurrent mean sentiment of ", airline_name, ": ", current_mean_sentiment)
+  data_without_negative_luggage <- data %>% 
+    filter(!(grepl("luggage", Review, ignore.case = TRUE) & sentiment < 0))
   new_mean_sentiment <- mean(data_without_negative_luggage$sentiment, na.rm = TRUE)
   
-  # To show increase in sentiment for united airlines in absence of negative luggage reviews
-  increase_in_mean_sentiment <- new_mean_sentiment - current_mean_sentiment
+  increase_in_mean_sentiment <- 0
+  if(airline_name == "United Airlines") {
+    increase_in_mean_sentiment <- new_mean_sentiment - current_mean_sentiment
+    cat("\nUnited Airlines: Increase in Mean sentiment in absence of reviews containing Luggage having negative sentiment: ", increase_in_mean_sentiment)
+    cat("\nUnited Airlines: Mean sentiment in absence of reviews containing Luggage having negative sentiment: ", new_mean_sentiment)
+  }
 
-  cat("Current Mean Sentiment of", airline_name, ":", current_mean_sentiment, "\n")
-  
-  if(airline_name == "United Airlines"){
-    cat("Increase in Mean Sentiment in absence of reviews containing 'Luggage' having Negative sentiment:", increase_in_mean_sentiment, "\n")
-    cat("Mean Sentiment in absence of Reviews containing 'Luggage' having negative sentiment:", new_mean_sentiment, "\n")}
+  return(c(airline_name, current_mean_sentiment, increase_in_mean_sentiment))
 }
 
-# Calculate sentiment statistics for each airlines to show comparison of sentiments, and increase in sentiment for united airlines in absence of negative luggage reviews
-calculate_sentiment_stats(reviews_united, "United Airlines")
-calculate_sentiment_stats(reviews_delta, "Delta Airlines")
-calculate_sentiment_stats(reviews_american, "American Airlines")
-calculate_sentiment_stats(reviews_southwest, "Southwest Airlines")
+airlines_data <- rbind(
+  calculate_sentiment_stats(reviews_united, "United Airlines"),
+  calculate_sentiment_stats(reviews_delta, "Delta Airlines"),
+  calculate_sentiment_stats(reviews_american, "American Airlines"),
+  calculate_sentiment_stats(reviews_southwest, "Southwest Airlines")
+)
+
+colnames(airlines_data) <- c("Airline", "CurrentMeanSentiment", "IncreaseInMeanSentiment")
+airlines_data <- as.data.frame(airlines_data)
+airlines_data$CurrentMeanSentiment <- as.numeric(as.character(airlines_data$CurrentMeanSentiment))
+airlines_data$IncreaseInMeanSentiment <- as.numeric(as.character(airlines_data$IncreaseInMeanSentiment))
+
+# Adjust the data for plotting
+airlines_data$AdjustedMeanSentiment <- with(airlines_data, ifelse(Airline == "United Airlines", 
+                                                                  CurrentMeanSentiment + IncreaseInMeanSentiment, 
+                                                                  CurrentMeanSentiment))
+
+# Plot the data
+ggplot() +
+  geom_bar(data = airlines_data, aes(x = Airline, y = AdjustedMeanSentiment, fill = Airline), 
+           position = "dodge", stat = "identity") +
+  geom_bar(data = subset(airlines_data, Airline == "United Airlines"), 
+           aes(x = Airline, y = CurrentMeanSentiment), 
+           position = "dodge", stat = "identity", fill = "red") +
+  labs(y = "Mean Sentiment", x = "Airline", fill = "Segment") +
+  theme_minimal()
+
 
 # For Recommendations to United to resolve their Luggage issues based on Reviews:
 # Filter the data for reviews mentioning Luggage and Sentiment < 0
